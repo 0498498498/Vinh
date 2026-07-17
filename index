@@ -1,9 +1,17 @@
+<!--
+  Web này host trên GitHub Pages: https://0498498498.github.io/Vinh/
+  Cách update: github.com/0498498498/Vinh → mở index.html → bút chì (Edit)
+  → sửa → Commit changes. Chờ ~1 phút, Ctrl+F5 để thấy thay đổi.
+  Data đọc từ Firebase Realtime DB (project cctv-eb850), do Discord.py push lên.
+  ĐA NGƯỜI DÙNG: mỗi người có 1 ROOM_ID riêng (khai trong Discord.py).
+  Link xem của từng người: .../Discord/?room=ROOM_ID_của_họ
+-->
 <!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lineage 2 | Real Time Dashboard</title>
+<title>L2VN.NET - Phuong™</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -15,6 +23,8 @@
     min-height: 100vh;
   }
   h2 { color: #00c9a7; font-size: 14px; margin-bottom: 10px; letter-spacing: 1px; }
+
+  /* --- GRID 4 CARDS --- */
   .grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -30,6 +40,8 @@
     text-align: left;
   }
   .card.muted { opacity: 0.38; }
+
+  /* tất cả dòng trong card cách trái 5px */
   .card-line {
     font-size: 11px;
     padding: 1px 6px 1px 5px;
@@ -38,10 +50,16 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+
   .c-name    { color: #00e676; font-size: 12px; font-weight: bold; margin-bottom: 2px; }
   .c-name.off{ color: #252a38; }
-  .c-name.alert{ color: #ff4444; }
   .c-muted   { color: #6b7494; }
+  .c-text    { color: #dde1f0; }
+  .c-border  { color: #252a38; }
+  .c-green   { color: #00e676; }
+  .c-red     { color: #ff4444; }
+
+  /* --- BOTTOM BAR --- */
   .bottom {
     display: flex;
     justify-content: space-between;
@@ -52,16 +70,73 @@
   .bottom-left  { color: #6b7494; }
   .bottom-right { color: #6b7494; }
   .bottom-right .val-green { color: #00e676; }
-  .c-red { color: #ff4444; }
+
+  /* --- EVENT LOG --- */
+  .events-wrap {
+    max-width: 400px;
+    margin: 8px auto 0;
+    background: #13161e;
+    border: 1px solid #252a38;
+    border-radius: 6px;
+    padding: 7px 8px;
+    text-align: left;
+  }
+  .events-title {
+    font-size: 11px;
+    color: #6b7494;
+    margin-bottom: 5px;
+    letter-spacing: 0.4px;
+  }
+  .events-title .date-str { color: #6b7494; font-weight: normal; }
+  .event-line {
+    font-size: 11px;
+    color: #6b7494;
+    padding: 2px 0;
+    border-bottom: 1px solid #1a1e29;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .event-line:last-child { border-bottom: none; }
+  .event-line.ok   { color: #00e676; }
+  .event-line.fail { color: #ff4444; }
+  .events-empty { font-size: 11px; color: #252a38; font-style: italic; }
+
+  /* --- ONLINE BOX --- */
+  .online-wrap {
+    max-width: 400px;
+    margin: 8px auto 0;
+    background: #13161e;
+    border: 1px solid #252a38;
+    border-radius: 6px;
+    padding: 6px 8px;
+    text-align: left;
+    font-size: 11px;
+    color: #6b7494;
+  }
 </style>
 </head>
 <body>
-<h2>Lineage 2 | Real Time Dashboard</h2>
+<h2>L2VN.NET - Phuong™</h2>
 <div class="grid" id="grid"></div>
 
 <div class="bottom">
-  <span class="bottom-left" id="appOnline">App Online: --:--:--</span>
+  <span class="bottom-left">
+    <span id="appOnline">Uptime: --:--:--</span>
+    <span style="color:#252a38;"> | </span>
+    <span id="zoneCountdown">Zone: 00:00:00</span>
+  </span>
   <span class="bottom-right" id="serverTime">Cập Nhật: --</span>
+</div>
+
+<div class="online-wrap" id="onlineWrap" style="display:none">
+  <span class="c-muted" id="onlineStatus"></span>
+</div>
+
+<div class="events-wrap" id="eventsWrap">
+  <div class="events-title">Lịch Sử <span class="date-str" id="logDate"></span></div>
+  <div class="events-empty" id="eventsEmpty">Chưa có hoạt động.</div>
+  <div id="eventsList"></div>
 </div>
 
 <script type="module">
@@ -73,10 +148,12 @@
 
   if (!room) {
     grid.innerHTML = '<div style="grid-column:1/-1;color:#ff4444;font-size:12px;">Thiếu ?room= trên link.</div>';
+    document.getElementById("eventsWrap").style.display = "none";
   } else {
     const firebaseConfig = { databaseURL: "https://cctv-eb850-default-rtdb.firebaseio.com/" };
     const app = initializeApp(firebaseConfig);
     const db  = getDatabase(app);
+
     const pad = n => String(n).padStart(2, "0");
 
     onValue(ref(db, `/status/${room}`), (snapshot) => {
@@ -88,20 +165,27 @@
         return;
       }
 
-      for (let i = 1; i <= 10; i++) {
+      for (let i = 1; i <= 4; i++) {
         const nv = data[`nv${i}`];
         if (!nv) continue;
 
-        const isOff   = !nv.state || nv.state === "off";
-        const isAlert = nv.state === "alert";
+        const isOff = !nv.state || nv.state === "off";
         const card  = document.createElement("div");
         card.className = "card" + (isOff ? " muted" : "");
 
+        // -- Tên nhân vật
         const nameDiv = document.createElement("div");
-        nameDiv.className = "card-line c-name" + (isOff ? " off" : "") + (isAlert ? " alert" : "");
+        nameDiv.className = "card-line c-name" + (isOff ? " off" : "");
         nameDiv.textContent = nv.name || `NV${i}`;
         card.appendChild(nameDiv);
 
+        // -- Biến hình
+        const bh = document.createElement("div");
+        bh.className = "card-line c-muted";
+        bh.textContent = "Biến hình: " + (nv.countdown || "--:--:--");
+        card.appendChild(bh);
+
+        // -- Auto Hunting
         const ah = document.createElement("div");
         ah.className = "card-line c-muted";
         let huntVal = "";
@@ -112,54 +196,20 @@
         } else {
           huntVal = '<span style="color:#ff4444;font-weight:bold">OFF</span>';
         }
-        let buffPart = "";
-        if (nv.buff === "Navy" || nv.buff === "Dragon") {
-          buffPart = ' <span style="color:#6b7494">| </span><span style="color:#3d8ef8;font-weight:bold">' + nv.buff + '</span>';
-        }
-        ah.innerHTML = '<span style="color:#6b7494">Auto Hunting: </span>' + huntVal + buffPart;
+        ah.innerHTML = '<span style="color:#6b7494">Auto Hunting: </span>' + huntVal;
         card.appendChild(ah);
-        const buffRow = null;
 
-        const kb = document.createElement("div");
-        kb.className = "card-line c-muted";
-        let kbVal = "";
-        const kbState = (nv.keyboard || "").toLowerCase();
-        if (kbState === "on") {
-          kbVal = '<span style="color:#00e676;font-weight:bold">ON</span>';
-        } else if (kbState === "pause") {
-          kbVal = '<span style="color:#ff8c00;font-weight:bold">PAUSE</span>';
-        } else if (kbState === "off") {
-          kbVal = '<span style="color:#6b7494;font-weight:bold">OFF</span>';
-        } else {
-          kbVal = '<span style="color:#252a38;font-weight:bold">---</span>';
-        }
-        const ramCol = nv.ram ? "#dde1f0" : "#252a38";
-        kb.innerHTML =
-          '<span style="color:#6b7494">Keyboard: </span>' + kbVal +
-          '<span style="color:#6b7494"> | Ram: </span><span style="color:' + ramCol + '">' + (nv.ram || "---") + '</span>';
-        card.appendChild(kb);
+        // -- CPU | RAM
+        const cpuram = document.createElement("div");
+        cpuram.className = "card-line";
+        const cpuCol = nv.cpu  ? "#dde1f0" : "#252a38";
+        const ramCol = nv.ram  ? "#dde1f0" : "#252a38";
+        cpuram.innerHTML =
+          `<span style="color:#6b7494">CPU: </span><span style="color:${cpuCol}">${nv.cpu || "---"}</span>` +
+          `<span style="color:#6b7494"> | RAM: </span><span style="color:${ramCol}">${nv.ram || "---"}</span>`;
+        card.appendChild(cpuram);
 
-        const cd = document.createElement("div");
-        cd.className = "card-line c-muted";
-        const bhPart = nv.countdown
-          ? '<span style="color:#6b7494">Bién Hình: </span><span style="color:#00e676">' + nv.countdown + '</span>'
-          : '';
-        const hpPart = nv.hp_countdown
-          ? '<span style="color:#6b7494">HP: </span><span style="color:#fff176">' + nv.hp_countdown + '</span>'
-          : '';
-        let cdRow = null;
-        if (bhPart && hpPart) {
-          cd.innerHTML = bhPart + '<span style="color:#6b7494"> | </span>' + hpPart;
-          cdRow = cd;
-        } else if (bhPart) {
-          cd.innerHTML = bhPart;
-          cdRow = cd;
-        } else if (hpPart) {
-          cd.innerHTML = hpPart;
-          cdRow = cd;
-        }
-        if (cdRow) card.appendChild(cdRow);
-
+        // -- Active
         const act = document.createElement("div");
         act.className = "card-line c-muted";
         let activeStr = "--:--";
@@ -178,15 +228,24 @@
         act.innerHTML = 'Active: <span style="color:#6b7494">' + activeStr + "</span>";
         card.appendChild(act);
 
+        // Ẩn hết nếu off
         if (isOff) {
-          [ah, buffRow, kb, cdRow, act].forEach(el => { if (el) el.style.display = "none"; });
+          [bh, ah, cpuram, act].forEach(el => el.style.display = "none");
         }
 
         grid.appendChild(card);
       }
 
-      document.getElementById("appOnline").textContent = "App Online: " + (data.app_uptime || "--:--:--");
+      // App Online
+      document.getElementById("appOnline").textContent = "Uptime: " + (data.app_uptime || "--:--:--");
 
+      // Zone Countdown
+      const zoneEl = document.getElementById("zoneCountdown");
+      const zoneVal = data.zone_countdown || "00:00:00";
+      zoneEl.textContent = "Zone: " + zoneVal;
+      zoneEl.style.color = (zoneVal !== "00:00:00") ? "#ffd700" : "#6b7494";
+
+      // Cập Nhật
       const now = new Date();
       const timeStr = pad(now.getHours()) + ":" + pad(now.getMinutes()) + ":" + pad(now.getSeconds());
       const dateStr = pad(now.getDate()) + "/" + pad(now.getMonth()+1) + "/" + now.getFullYear();
@@ -194,7 +253,7 @@
       const serverEl = document.getElementById("serverTime");
 
       let anyActive = false;
-      for (let i = 1; i <= 10; i++) {
+      for (let i = 1; i <= 4; i++) {
         const nv = data[`nv${i}`];
         if (nv && nv.state && nv.state !== "off") { anyActive = true; break; }
       }
@@ -205,6 +264,36 @@
         serverEl.innerHTML =
           'Cập Nhật: <span class="val-green">' + (st || timeStr) + '</span>' +
           ' <span style="color:#6b7494">' + dateStr + '</span>';
+      }
+
+      // Online box — App Online
+      const onlineWrap = document.getElementById("onlineWrap");
+      onlineWrap.style.display = "none";
+
+      // Log date
+      const logDateEl = document.getElementById("logDate");
+      if (data.log_date) {
+        logDateEl.textContent = "Ngày " + data.log_date;
+      } else {
+        logDateEl.textContent = "Ngày " + dateStr;
+      }
+
+      // Event log
+      const eventsEmpty = document.getElementById("eventsEmpty");
+      const eventsList  = document.getElementById("eventsList");
+      eventsList.innerHTML = "";
+      const events = data.events;
+      if (!events || events.length === 0) {
+        eventsEmpty.style.display = "block";
+      } else {
+        eventsEmpty.style.display = "none";
+        events.slice(0, 22).forEach(msg => {
+          const div = document.createElement("div");
+          const isFail = msg.includes("không biến hình");
+          div.className = "event-line " + (isFail ? "fail" : "ok");
+          div.textContent = msg;
+          eventsList.appendChild(div);
+        });
       }
     });
   }
