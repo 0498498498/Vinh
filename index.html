@@ -11,7 +11,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SIGNATURE EDITION FOR MR. VINH</title>
+<title>L2VN.NET - Phuong™</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -24,7 +24,7 @@
   }
   h2 { color: #00c9a7; font-size: 14px; margin-bottom: 10px; letter-spacing: 1px; }
 
-  /* --- GRID 4 CARDS --- */
+  /* --- GRID 6 CARDS --- */
   .grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -117,14 +117,14 @@
 </style>
 </head>
 <body>
-<h2>Lineage 2 - Vinh</h2>
+<h2>L2VN.NET - Phuong™</h2>
 <div class="grid" id="grid"></div>
 
 <div class="bottom">
   <span class="bottom-left">
-    <span id="appOnline">Online: --:--:--</span>
+    <span id="appOnline">Uptime: --:--:--</span>
     <span style="color:#252a38;"> | </span>
-    <span id="zoneCountdown">Time Zone: 00:00:00</span>
+    <span id="zoneCountdown">Zone: 00:00:00</span>
   </span>
   <span class="bottom-right" id="serverTime">Cập Nhật: --</span>
 </div>
@@ -165,7 +165,7 @@
         return;
       }
 
-      for (let i = 1; i <= 4; i++) {
+      for (let i = 1; i <= 6; i++) {
         const nv = data[`nv${i}`];
         if (!nv) continue;
 
@@ -253,7 +253,7 @@
       const serverEl = document.getElementById("serverTime");
 
       let anyActive = false;
-      for (let i = 1; i <= 4; i++) {
+      for (let i = 1; i <= 6; i++) {
         const nv = data[`nv${i}`];
         if (nv && nv.state && nv.state !== "off") { anyActive = true; break; }
       }
